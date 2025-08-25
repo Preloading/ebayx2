@@ -1,0 +1,9 @@
+Package: dev.preloading.ebayx2
+Name: EBayX²
+Version: 0.0.1
+Architecture: iphoneos-arm
+Description: A tweak that replaces the deprecated FindingAPI, with the new BrowseAPI.
+Maintainer: Preloading
+Author: Preloading
+Section: Tweaks
+Depends: mobilesubstrate (>= 0.9.5000)
