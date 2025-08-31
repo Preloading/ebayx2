@@ -2,6 +2,10 @@
 #import <execinfo.h>
 #import "ebayheaders/EBayConnector.h"
 #import "ebayheaders/FSFindItemsAdvancedRequest.h"
+#import "ebayheaders/FSFindItemsAdvancedResponse.h"
+#import "ebayheaders/Settings.h"
+#import "ebayheaders/EBayItem.h"
+#import "sbjson/JSON.h"
 #import <curl/curl.h>
 
 NSString *URLEncode(NSString *string) {
@@ -48,7 +52,7 @@ NSString *URLEncode(NSString *string) {
 	NSString *u = [NSString stringWithFormat:@"https://api.ebay.com/buy/browse/v1/item_summary/search?"];
 
 	if (self.pageNumber > 0) {
-		u=[u stringByAppendingString:[NSString stringWithFormat:@"limit=%d&offset=%d&", self.maxEntries, self.pageNumber]];
+		u=[u stringByAppendingString:[NSString stringWithFormat:@"limit=%d&offset=%d&", self.maxEntries, self.maxEntries*(self.pageNumber-1)]];
 	}
 
 	if ([self.itemSort isEqualToString:@"Distance"]) {
@@ -85,8 +89,10 @@ NSString *URLEncode(NSString *string) {
 		[aspectFilter addObject:[NSString stringWithFormat:@"categoryId:%@", self.categoryID]];
 	}
 
+
 	// Histograms
 	NSMutableArray *histograms = [[NSMutableArray alloc] init];
+	[histograms addObject:@"MATCHING_ITEMS"];
 	if (self.includeAspectHistogram) {
 		[histograms addObject:@"ASPECT_REFINEMENTS"];
 	}
@@ -200,7 +206,12 @@ NSString *URLEncode(NSString *string) {
 	// aspect_filter=AspectFilter&
 	// epid=string&
 	NSLog(@"[EBayX] URLS are: %@", u);
-	return [NSURL URLWithString:u];
+	// return [NSURL URLWithString:u];
+	return u;
+}
+
+-(int)apiType {
+	return 101;
 }
 
 // Aug 25 16:31:40 Logans-iPhone eBay[20512]: [EbayX] Callstack for xml builder:
@@ -215,17 +226,20 @@ NSString *URLEncode(NSString *string) {
 
 
 -(void)buildRequest {
-	void *callstack[128];
-	int frames = backtrace(callstack, 128);
-	char **symbols = backtrace_symbols(callstack, frames);
-	NSMutableString *callstackString = [@"[EbayX] Callstack for xml builder:\n" mutableCopy];
-	for (int i = 0; i < frames; i++) {
-		[callstackString appendFormat:@"%s\n", symbols[i]];
-	}
-	NSLog(@"%@", callstackString);
+	return; // XML is not needed
+
+
+	// void *callstack[128];
+	// int frames = backtrace(callstack, 128);
+	// char **symbols = backtrace_symbols(callstack, frames);
+	// NSMutableString *callstackString = [@"[EbayX] Callstack for xml builder:\n" mutableCopy];
+	// for (int i = 0; i < frames; i++) {
+	// 	[callstackString appendFormat:@"%s\n", symbols[i]];
+	// }
+	// NSLog(@"%@", callstackString);
 	
-	free(symbols);
-	return %orig;
+	// free(symbols);
+	// return %orig;
 }
 
 %end
@@ -244,7 +258,30 @@ NSString *URLEncode(NSString *string) {
 %hook EBayConnector
 
 - (NSURLRequest *)setupRequest  {
+	// void *callstack[128];
+	// int frames = backtrace(callstack, 128);
+	// char **symbols = backtrace_symbols(callstack, frames);
+	// NSMutableString *callstackString = [@"[EbayX] Callstack for xml builder:\n" mutableCopy];
+	// for (int i = 0; i < frames; i++) {
+	// 	[callstackString appendFormat:@"%s\n", symbols[i]];
+	// }
+	// NSLog(@"%@", callstackString);
+	
+	// free(symbols);
+	// return %orig;
+
+	int apiType = [self.request apiType];
+	if (apiType < 100) {
+		return %orig;
+	}
+
+
+	id settings = [NSClassFromString(@"Settings") performSelector:@selector(sharedSettings)]; // it wont import
+// NSLog(@"[DEBUG] target: %@, action: %@", self.target, NSStringFromSelector(self.action));
+	NSLog(@"[DEBUG] Responce Class: %@", [self.request responseClass]);
+
 	NSLog(@"[EbayX] setup da request: %@", [[self.request apiURL] class]);
+	// return %orig;
 	// if ([[self.request apiURL] isEqualToString:@"http://svcs.ebay.com/services/search/FindingService/v1"]) { // Finding service
 	// 	// NSLog(@"[EbayX] We get to replace this request! EbayAPIThingy: %d", [self.request apiType]);
 
@@ -255,10 +292,258 @@ NSString *URLEncode(NSString *string) {
 	// } else {
 	// 	return %orig;
 	// }
-	return %orig;
+
+	
+	// Get the API URL from the request
+    NSString *apiURL = [self.request apiURL];
+    
+    // Create mutable URL request
+    NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:apiURL]
+                                                            cachePolicy:NSURLRequestUseProtocolCachePolicy
+                                                        timeoutInterval:60.0];
+    
+	NSString *siteID;
+    
+    if ([self.request siteIDOverride] != nil) {
+        siteID = [[self.request siteIDOverride] stringValue];
+    } else {
+        siteID = [[settings siteID] stringValue];
+    }
+	
+	if (apiType == 101) {
+		[urlRequest setHTTPMethod:@"GET"];
+
+		[urlRequest addValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+	}
+	
+
+
+	[urlRequest addValue:[settings appID] forHTTPHeaderField:@"X-EBAY-SOA-SECURITY-APPNAME"];
+	[urlRequest addValue:siteID forHTTPHeaderField:@"X-EBAY-C-MARKETPLACE-ID"];
+	[urlRequest addValue:@"Bearer v^1.1#i^1#f^0#I^3#p^1#r^0#t^H4sIAAAAAAAA/+VYe4wTRRi/3ksPOMCg8pDEshwauXQ7u9ttt+u1pFy5o+bePQ68gLiPWbpcu7vsTr2rUamXSFASMCHyMApnACVCDBEiQY1/GEzMXYzRIBI0KKCGEEg0gYA81Nn2OHon4ZCrsYn9p5lvvvnm9/vN983MDkiXV8xds3DNpUrHPcV9aZAudjio8aCivKx6YknxjLIikOPg6EtXpUt7S87UWEIibvBt0DJ0zYLOnkRcs/iMMUAkTY3XBUu1eE1IQItHEh8NNTbwNAl4w9SRLulxwhkJBwhR8VE0ZAWF88uULIrYqt2I2a7jfp8H+FjRAzlBZhVKxv2WlYQRzUKChgIEDWjWBTgXQ7UDL88CnmFJjqM6CWcHNC1V17ALCYhgBi6fGWvmYL09VMGyoIlwECIYCdVFm0OR8IKm9hp3TqzgoA5RJKCkNbxVq8vQ2SHEk/D201gZbz6alCRoWYQ7mJ1heFA+dAPMXcDPSO3zUZzAiB6R8wMfYDx5kbJONxMCuj0O26LKLiXjykMNqSg1mqJYDXEllNBgqwmHiISd9l9rUoirigrNALFgfujJUEsLEXxCj2kYCXJBKaaLQkpxtbSFXbTXq/j8MqYEJQ/L0DI9OFE22qDMI2aq1TVZtUWznE06mg8xajhSG0+ONtipWWs2QwqyEeX6cTc09DGd9qJmVzGJYpq9rjCBhXBmmqOvwNBohExVTCI4FGFkR0aiACEYhioTIzszuTiYPj1WgIghZPBud3d3N9nNkLq5wk0DQLmXNDZEpRhMCAT2tWs966+OPsClZqhIEI+0VB6lDIylB+cqBqCtIIIsxfgAN6j7cFjBkda/GXI4u4dXRL4qBLKA9gq0gqvDr/hkJh8VEhxMUreNA+LcdCUEswsiIy5I0CXhPEsmoKnKOJZCM5wCXbLXr7g8fkVxiazsdVEKhABCUZT83P+pUO401aNQMiHKS67nLc+TUdjaLcud4fZn60WZ4axqeUlsVfMqUaijQcobrW5rjEkrG8Oa3BW402q4JfnauIqVacfz50MAu9bzJ8JC3UJQHhO9qKQbsEWPq1KqsBaYMeUWwUSpKIzHsWFMJEOGEcnPXp03ev9wm7g73vk7o/6j8+mWrCw7ZQuLlT3ewgEEQyXtE4iU9ITbrnVdwNcP27w8g3pMvFV8cy0o1phklq0qZ6+cZIYuaT0jkSa09KSJb9tks30Da9e7oIbPM2Tq8Tg0O6gx13MikUSCGIeFVth5SHBVKLDDlvKxXi/NAIYdEy8pc5QuL7QtKR9bcWmvY9ao/NugEE8UFnfD1OWkZN8x/4VPBvfwB4xgUeZH9To+Bb2OT4odDlAD5lCzwazykkWlJRNmWCqCpCoopKWu0PB3uQnJLpgyBNUsnlL05cQG+cWFDRfTYvLg4gvzuKLKnPeTvmVg2tALSkUJNT7nOQXMvNlTRk2aWkmzgGMo4GVxPneC2Td7S6kHS++PfrvxpcNv1tfTF2Yb5efW7t4v/vQNqBxycjjKivBiF1VR359/DPx6uqqOPj793j+PbemZR389f96ySQf/eFjfce34HHbxxt82jyub8d2ycW9/8W7N6T27iM+DAzWLDpwfX9l8OPgzbG29/OGVcx9daZ28taqpZ9fL20/0bzzUX/fQwUeqj7Sd6n+9p7jpAap29Tt7uR367pr9DSdEZyz8ylPua9vO33dg6dINW/rI/lPq0Rdejfxy6YezO+ceGZh87P11A67r2oHu51fXL31000VyaghG1/9ev6a0+sTyxI/pM5G1lLhvSm3f2c3THYbSMYCuMpsnPM1s8h8+NO3jbW99tmftvveCYOb6N147ctn93N6eRde/WrCdrZjLdE66fvXx0zt2npy4/ejJdSUfbM2u5V8M4PI82RIAAA==" forHTTPHeaderField:@"Authorization"];
+	
+	// [urlRequest addValue:[self.request verb] forHTTPHeaderField:@"X-EBAY-SOA-OPERATION-NAME"];
+
+	return urlRequest;
 }
 
+// -(BOOL)shouldLogXML {
+// 	return true;
+// }
+
 %end
+
+%hook FSFindItemsAdvancedResponse
+- (void)parseData:(NSData *)data {
+	// void *callstack[128];
+	// int frames = backtrace(callstack, 128);
+	// char **symbols = backtrace_symbols(callstack, frames);
+	// NSMutableString *callstackString = [@"[EbayX] Callstack for xml builder:\n" mutableCopy];
+	// for (int i = 0; i < frames; i++) {
+	// 	[callstackString appendFormat:@"%s\n", symbols[i]];
+	// }
+	// NSLog(@"%@", callstackString);
+	
+	// free(symbols);
+	
+	// return %orig;
+
+	SBJsonParser *parser = [[SBJsonParser alloc] init];
+
+	// NSLog(@"[DEBUG] The data we have is %@", [[NSString alloc] initWithData:data encoding:NSASCIIStringEncoding]);
+	NSDictionary *result = [parser objectWithString:[[NSString alloc] initWithData:data encoding:NSASCIIStringEncoding]];
+
+
+
+for( NSString *aKey in [result allKeys] )
+{
+    // do something like a log:
+    NSLog(@"[EBayX] a key is %@", aKey);
+}
+
+
+	if (result) {
+		// yay!
+		NSMutableArray *items = [[NSMutableArray alloc] init]; 
+		NSArray *itemsJson = result[@"itemSummaries"];
+		if (itemsJson) {
+			NSLog(@"[EbayX] items: %lu", (unsigned long)[itemsJson count]);
+			for (int i = 0; i < (unsigned long)[itemsJson count]; i++) {
+				NSLog(@"[EbayX] Holy shiiiiit we have an item");
+				EBayItem *item = [[NSClassFromString(@"EBayItem") alloc] init];
+				NSDictionary *jsonItem = itemsJson[i];
+
+				// shippingInfo.shippingType
+				// NSString *shippingType = @"NotSpecified";
+				// if ([jsonItem[@"shippingOptions"][0][@"shippingCost"][@"currency"] isEqualToString:@""]) {
+				// 	shippingType = @"Free";
+				// } else if ([jsonItem[@"shippingOptions"][0][@"shippingCostType"] isEqualToString:@"FLAT"]) {
+				// 	shippingType = @"Flat";
+				// } else if ([jsonItem[@"shippingOptions"][0][@"shippingCostType"] isEqualToString:@"CALCULATED"]) {
+				// 	shippingType = @"Calculated";
+				// }
+
+
+				// sellingStatus.convertedCurrentPrice
+				NSDictionary *convertedCurrentPrice = nil;
+				if (jsonItem[@"price"][@"convertedFromCurrency"]) {
+					convertedCurrentPrice = @{
+						@"currencyId": jsonItem[@"price"][@"convertedFromCurrency"],
+						@"value": jsonItem[@"price"][@"convertedFromValue"],
+					};
+				} else {
+					convertedCurrentPrice = @{
+						@"currencyId": jsonItem[@"price"][@"currency"],
+						@"value": jsonItem[@"price"][@"value"],
+					};
+				}
+
+				// sellingStatus.timeLeft
+
+				// listingInfo.buyItNowAvailable
+				bool buyItNowAvailable = [jsonItem[@"buyingOptions"] containsObject:@"FIXED_PRICE"];
+				
+				// listingInfo.listingType
+				NSString *listingType = @"Unknown";
+				if ([jsonItem[@"buyingOptions"] containsObject:@"FIXED_PRICE"] && buyItNowAvailable) {
+					listingType = @"AuctionWithBIN";
+				} else if (buyItNowAvailable) {
+					listingType = @"FixedPrice";
+				} else if ([jsonItem[@"buyingOptions"] containsObject:@"AUCTION"]) {
+					listingType = @"AuctionWithBIN";
+				} else if ([jsonItem[@"buyingOptions"] containsObject:@"BEST_OFFER"]) {
+					listingType = @"Auction"; // i guess?
+				} else if ([jsonItem[@"buyingOptions"] containsObject:@"CLASSIFIED_AD"]) {
+					listingType = @"Classified";
+				}
+
+				
+
+				// listingInfo
+				NSMutableDictionary *listingInfo = [@{
+					@"buyItNowAvailable": @(buyItNowAvailable),
+					@"bestOfferEnabled": @([jsonItem[@"buyingOptions"] containsObject:@"BEST_OFFER"]),
+					@"listingType": listingType,
+					@"startTime": @"2024-06-12T17:47:51.000Z", // TODO
+					@"endTime": @"2026-06-12T17:47:51.000Z", // TODO
+					@"gift": @NO
+
+				} mutableCopy];
+
+				if (buyItNowAvailable) {
+					listingInfo[@"buyItNowPrice"] = @{
+						@"currencyId": jsonItem[@"price"][@"currency"],
+						@"value": jsonItem[@"price"][@"value"],
+					};
+
+					if (jsonItem[@"price"][@"convertedFromCurrency"]) {
+						listingInfo[@"convertedBuyItNowPrice"] = @{
+							@"currencyId": jsonItem[@"price"][@"convertedFromCurrency"],
+							@"value": jsonItem[@"price"][@"convertedFromValue"],
+						};
+					} else {
+						listingInfo[@"convertedBuyItNowPrice"] = @{
+							@"currencyId": jsonItem[@"price"][@"currency"],
+							@"value": jsonItem[@"price"][@"value"],
+						};
+					}
+				}
+
+				// combine everything into one mega dictionary.
+				NSMutableDictionary *itemBase = [@{
+					@"itemId": jsonItem[@"legacyItemId"],
+					@"title": jsonItem[@"title"],
+					// @"globalId": jsonItem[@"listingMarketplaceId"],
+					@"primaryCategory": @{
+						@"categoryId": jsonItem[@"categories"][0][@"categoryId"],
+						@"categoryName": jsonItem[@"categories"][0][@"categoryName"],
+					},
+					@"galleryURL": jsonItem[@"image"][@"imageUrl"],
+					@"viewItemURL": jsonItem[@"itemWebUrl"],
+					@"autopay": @YES, // todo figure this out
+					// @"shippingInfo": @{
+					// 	@"shippingType": shippingType,
+					// 	@"shippingServiceCost": @{
+					// 		@"currencyId": jsonItem[@"shippingOptions"][0][@"shippingCost"][@"currency"],
+					// 		@"value": jsonItem[@"shippingOptions"][0][@"shippingCost"][@"value"],
+					// 	}
+					// },
+					@"sellingStatus": @{
+						// @"bidCount": jsonItem[@"bidCount"],
+						@"currentPrice": @{
+							@"currencyId": jsonItem[@"price"][@"currency"],
+							@"value": jsonItem[@"price"][@"value"],
+						},
+						@"convertedCurrentPrice": convertedCurrentPrice,
+						@"sellingState": @"Active", // previous me said that this was a cheat. idk why.
+						@"timeLeft": @"P0DT0H1M0S",
+
+					},
+					@"listingInfo": listingInfo,
+					@"sellerInfo": @{
+						@"feedbackScore": jsonItem[@"seller"][@"feedbackScore"],
+						@"positiveFeedbackPercent": jsonItem[@"seller"][@"feedbackPercentage"],
+						@"sellerUserName": jsonItem[@"seller"][@"username"],
+						@"topRatedSeller": @NO, // temp
+						@"feedbackRatingStar": @"RedShooting",
+					},
+
+				} mutableCopy];
+
+				NSString *postalCode = jsonItem[@"itemLocation"][@"postalCode"];
+				if (postalCode) {
+					itemBase[@"postalCode"] = postalCode;
+				}
+
+				NSArray *categories = jsonItem[@"categories"];
+				if ([categories count] > 1) {
+					NSDictionary *cat = categories[1]; // meow :3
+					NSString *catId = cat[@"categoryId"];
+					NSString *catName = cat[@"categoryName"];
+					if (catId && catName) {
+						itemBase[@"secondaryCategory"] = @{
+							@"categoryId": catId,
+							@"categoryName": catName
+						};
+					}
+				}
+
+
+				// finish!
+                [item setValue:itemBase forKey:@"itemInfo"];
+				[items addObject:item];
+			}
+			self.items = items;
+			[self setAck:@"Success"];
+		} else {
+			NSLog(@"[EBayX] getting items has failed");
+		}
+	} else {
+		NSLog(@"[EBayX] JSON parsing failed :(");
+	}
+}
+
+// -(BOOL)success {
+// 		void *callstack[128];
+// 	int frames = backtrace(callstack, 128);
+// 	char **symbols = backtrace_symbols(callstack, frames);
+// 	NSMutableString *callstackString = [@"[EbayX] Callstack for xml builder:\n" mutableCopy];
+// 	for (int i = 0; i < frames; i++) {
+// 		[callstackString appendFormat:@"%s\n", symbols[i]];
+// 	}
+// 	NSLog(@"%@", callstackString);
+	
+// 	free(symbols);
+	
+// 	 BOOL a = %orig;
+	
+// 	NSLog(@"[DEBUG] did succeed? %hhd", a);
+
+// 	return 1;
+// }
+
+%end
+
 
 %hook Settings
 
@@ -386,7 +671,11 @@ static size_t headerCallback(char *buffer, size_t size, size_t nitems, void *use
         *response = httpResp;
     }
 
-	NSLog(@"[EbayX] req good!");
+// 	NSLog(@"[EbayX] req good!");
+
+// 	NSString *responseString = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding];
+// NSLog(@"[EbayX] Response Body:\n%@", responseString);
+
     return responseData;
 }
 

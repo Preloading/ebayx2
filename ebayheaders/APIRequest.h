@@ -8,7 +8,7 @@
 
 @class XMLNode, XMLTree;
 
-@interface APIRequest
+@interface APIRequest: NSObject
 {
     int apiType;
     int activityType;

@@ -6,10 +6,11 @@
 
 // #import "EBaySOARequest.h"
 #import "CurrencyAmount.h"
+#include "ebayheaders/APIRequest.h"
 
 @class CurrencyAmount;
 
-@interface FSFindItemsAdvancedRequest : NSObject // EBaySOARequest
+@interface FSFindItemsAdvancedRequest : APIRequest // EBaySOARequest
 {
     NSString *query;
     int pageNumber;
