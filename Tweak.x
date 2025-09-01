@@ -19,6 +19,44 @@ NSString *URLEncode(NSString *string) {
 }
 
 
+NSDate *FormatDate(NSString *input) {
+ NSDateFormatter *dateFormat = [NSDateFormatter new];
+ //correcting format to include seconds and decimal place
+ dateFormat.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
+ // Always use this locale when parsing fixed format date strings
+ NSLocale* posix = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
+ dateFormat.locale = posix;
+ return [dateFormat dateFromString:input];
+}
+
+
+// this was mostly AI. I really dont like dealing with time, so uhhhh yeah soz.
+NSString *iso8601DurationMaker(NSDate *startDate, NSDate *endDate) {
+    if (!endDate) {
+        return @"P0DT0H0M0S";
+    }
+
+    NSDate *now = [NSDate date];
+    if ([now compare:endDate] == NSOrderedDescending) {
+        // If now is after endDate, item has ended
+        return @"P0DT0H0M0S";
+    }
+
+    NSTimeInterval interval = [endDate timeIntervalSinceDate:now];
+    if (interval <= 0) {
+        return @"P0DT0H0M0S";
+    }
+
+    NSInteger totalSeconds = (NSInteger)interval;
+    NSInteger days = totalSeconds / 86400;
+    NSInteger hours = (totalSeconds % 86400) / 3600;
+    NSInteger minutes = (totalSeconds % 3600) / 60;
+    NSInteger seconds = totalSeconds % 60;
+
+    return [NSString stringWithFormat:@"P%ldDT%ldH%ldM%ldS", (long)days, (long)hours, (long)minutes, (long)seconds];
+}
+
+
 // %hook NSURL
 // // + (instancetype)URLWithString:(NSString *)URLString {
 // // 	void *callstack[128];
@@ -126,7 +164,6 @@ NSString *URLEncode(NSString *string) {
 	NSString *countryCode = nil;
 
 	id signInController = [NSClassFromString(@"SignInController") performSelector:@selector(sharedController)];
-
 	BOOL signedIn = NO;
 	if ([signInController respondsToSelector:@selector(signedIn)]) {
 		signedIn = ((BOOL (*)(id, SEL))[signInController methodForSelector:@selector(signedIn)])(signInController, @selector(signedIn));
@@ -186,7 +223,7 @@ NSString *URLEncode(NSString *string) {
     }
 
 	if (filters && filters.count > 0) {
-		u=[u stringByAppendingString:[NSString stringWithFormat:@"filters=%@&", URLEncode([filters componentsJoinedByString:@","])]];
+		u=[u stringByAppendingString:[NSString stringWithFormat:@"filter=%@&", URLEncode([filters componentsJoinedByString:@","])]];
 	}
 
 	u=[u stringByAppendingString:[NSString stringWithFormat:@"q=%@&", URLEncode(self.query) ]];
@@ -301,14 +338,12 @@ NSString *URLEncode(NSString *string) {
     NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:apiURL]
                                                             cachePolicy:NSURLRequestUseProtocolCachePolicy
                                                         timeoutInterval:60.0];
-    
-	NSString *siteID;
-    
-    if ([self.request siteIDOverride] != nil) {
-        siteID = [[self.request siteIDOverride] stringValue];
-    } else {
-        siteID = [[settings siteID] stringValue];
-    }
+        
+    // if ([self.request siteIDOverride] != nil) {
+    //     siteID = [[self.request siteIDOverride] stringValue];
+    // } else {
+    //     siteID = [[settings siteID] stringValue];
+    // }
 	
 	if (apiType == 101) {
 		[urlRequest setHTTPMethod:@"GET"];
@@ -316,11 +351,24 @@ NSString *URLEncode(NSString *string) {
 		[urlRequest addValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
 	}
 	
+	NSString *countryCode;
+	if ([[NSClassFromString(@"SignInController") performSelector:@selector(sharedController)] signedIn] && [settings myLocationCountryIsGoodForSearch]) {
+		countryCode = [settings myLocationCountry];
+	} else {
+		countryCode = [[settings currentSite] isoCode];
+	}
 
+	if (![self.request postalCode]) {
+		[self.request setPostalCode:[settings myLocationPostalCodeTrimmedForSearch]];
+	}
+	if ([self.request postalCode]) {
+		[urlRequest addValue:[NSString stringWithFormat:@"contextualLocation=%@", URLEncode([NSString stringWithFormat:@"country=%@,zip=%@", countryCode, [self.request postalCode]])] forHTTPHeaderField:@"X-EBAY-C-ENDUSERCTX"];
+	}
+	
 
 	[urlRequest addValue:[settings appID] forHTTPHeaderField:@"X-EBAY-SOA-SECURITY-APPNAME"];
-	[urlRequest addValue:siteID forHTTPHeaderField:@"X-EBAY-C-MARKETPLACE-ID"];
-	[urlRequest addValue:@"Bearer v^1.1#i^1#f^0#I^3#p^1#r^0#t^H4sIAAAAAAAA/+VYe4wTRRi/3ksPOMCg8pDEshwauXQ7u9ttt+u1pFy5o+bePQ68gLiPWbpcu7vsTr2rUamXSFASMCHyMApnACVCDBEiQY1/GEzMXYzRIBI0KKCGEEg0gYA81Nn2OHon4ZCrsYn9p5lvvvnm9/vN983MDkiXV8xds3DNpUrHPcV9aZAudjio8aCivKx6YknxjLIikOPg6EtXpUt7S87UWEIibvBt0DJ0zYLOnkRcs/iMMUAkTY3XBUu1eE1IQItHEh8NNTbwNAl4w9SRLulxwhkJBwhR8VE0ZAWF88uULIrYqt2I2a7jfp8H+FjRAzlBZhVKxv2WlYQRzUKChgIEDWjWBTgXQ7UDL88CnmFJjqM6CWcHNC1V17ALCYhgBi6fGWvmYL09VMGyoIlwECIYCdVFm0OR8IKm9hp3TqzgoA5RJKCkNbxVq8vQ2SHEk/D201gZbz6alCRoWYQ7mJ1heFA+dAPMXcDPSO3zUZzAiB6R8wMfYDx5kbJONxMCuj0O26LKLiXjykMNqSg1mqJYDXEllNBgqwmHiISd9l9rUoirigrNALFgfujJUEsLEXxCj2kYCXJBKaaLQkpxtbSFXbTXq/j8MqYEJQ/L0DI9OFE22qDMI2aq1TVZtUWznE06mg8xajhSG0+ONtipWWs2QwqyEeX6cTc09DGd9qJmVzGJYpq9rjCBhXBmmqOvwNBohExVTCI4FGFkR0aiACEYhioTIzszuTiYPj1WgIghZPBud3d3N9nNkLq5wk0DQLmXNDZEpRhMCAT2tWs966+OPsClZqhIEI+0VB6lDIylB+cqBqCtIIIsxfgAN6j7cFjBkda/GXI4u4dXRL4qBLKA9gq0gqvDr/hkJh8VEhxMUreNA+LcdCUEswsiIy5I0CXhPEsmoKnKOJZCM5wCXbLXr7g8fkVxiazsdVEKhABCUZT83P+pUO401aNQMiHKS67nLc+TUdjaLcud4fZn60WZ4axqeUlsVfMqUaijQcobrW5rjEkrG8Oa3BW402q4JfnauIqVacfz50MAu9bzJ8JC3UJQHhO9qKQbsEWPq1KqsBaYMeUWwUSpKIzHsWFMJEOGEcnPXp03ev9wm7g73vk7o/6j8+mWrCw7ZQuLlT3ewgEEQyXtE4iU9ITbrnVdwNcP27w8g3pMvFV8cy0o1phklq0qZ6+cZIYuaT0jkSa09KSJb9tks30Da9e7oIbPM2Tq8Tg0O6gx13MikUSCGIeFVth5SHBVKLDDlvKxXi/NAIYdEy8pc5QuL7QtKR9bcWmvY9ao/NugEE8UFnfD1OWkZN8x/4VPBvfwB4xgUeZH9To+Bb2OT4odDlAD5lCzwazykkWlJRNmWCqCpCoopKWu0PB3uQnJLpgyBNUsnlL05cQG+cWFDRfTYvLg4gvzuKLKnPeTvmVg2tALSkUJNT7nOQXMvNlTRk2aWkmzgGMo4GVxPneC2Td7S6kHS++PfrvxpcNv1tfTF2Yb5efW7t4v/vQNqBxycjjKivBiF1VR359/DPx6uqqOPj793j+PbemZR389f96ySQf/eFjfce34HHbxxt82jyub8d2ycW9/8W7N6T27iM+DAzWLDpwfX9l8OPgzbG29/OGVcx9daZ28taqpZ9fL20/0bzzUX/fQwUeqj7Sd6n+9p7jpAap29Tt7uR367pr9DSdEZyz8ylPua9vO33dg6dINW/rI/lPq0Rdejfxy6YezO+ceGZh87P11A67r2oHu51fXL31000VyaghG1/9ev6a0+sTyxI/pM5G1lLhvSm3f2c3THYbSMYCuMpsnPM1s8h8+NO3jbW99tmftvveCYOb6N147ctn93N6eRde/WrCdrZjLdE66fvXx0zt2npy4/ejJdSUfbM2u5V8M4PI82RIAAA==" forHTTPHeaderField:@"Authorization"];
+	[urlRequest addValue:[[settings currentSite] globalID] forHTTPHeaderField:@"X-EBAY-C-MARKETPLACE-ID"];
+	[urlRequest addValue:@"Bearer v^1.1#i^1#I^3#p^1#r^0#f^0#t^H4sIAAAAAAAA/+VYbWxTVRhe9ylhGyhEYPCjXBD5sO25vb39uK7FQhkrbGtZK+DA4P04XS+7vbfccy+lhmgZcdNMQjBo1IWwRAhoTFxI0JgQUISB+AP9oRhIQEkwkADRoNGYkHhuW0Y3CUNWYxP7pznvec97nuc573vOuQdkqics7Gnu+b3OVFM+kAGZcpOJnAgmVFctqq8ob6gqAwUOpoHM3Exld8XVRsQmpCTTDlFSkRE0b0lIMmKyRi+hqzKjsEhEjMwmIGI0non4W1sYuxUwSVXRFF6RCHMw4CU8gCI56OadkHWzJKCxVb4TM6p4CZp28BxP006K9jgogcP9COkwKCONlTUvYQd22gI8FkBGgYNxkAxFWWnK1UGYV0MViYqMXayA8GXhMtmxagHW+0NlEYKqhoMQvqC/KRLyBwPL2qKNtoJYvrwOEY3VdDSytVQRoHk1K+nw/tOgrDcT0XkeIkTYfLkZRgZl/HfAPAT8rNQUxwIXxfNuzk5ywOEuipRNippgtfvjMCyiYIllXRkoa6KWHktRrAa3EfJavtWGQwQDZuNvlc5KYkyEqpdYtsT/nD8cJnwrlLiMkWgWyMcVjk3HLOH2gMXudMZcHgG4sdlBU3bBnp8oFy0v86iZliqyIBqiIXOboi2BGDUcrQ1VoA12Cskh1R/TDESFfs47Gto9Hcai5lZR1+Kysa4wgYUwZ5tjr8DwaE1TRU7X4HCE0R1ZibwEm0yKAjG6M5uL+fTZgrxEXNOSjM2WSqWsKcqqqJ02OwCkbW1rS4SPwwRLYF+j1nP+4tgDLGKWCg/xSCQyWjqJsWzBuYoByJ2EjyYpF3DndR8Jyzfa+jdDAWfbyIooVoU4yBh0CtBJARcNSNJTjArx5ZPUZuCAODctCVbtglpSYnlo4XGe6QmoigJD0TE75Y5Bi+D0xCwOTyxm4WjBacGYIICQ43iP+/9UKA+a6hHIq1ArSq4XLc/1CFyVEoSOQPTF5ZxAudEiYW18U2gTxzbZQdoZWdTeGuc3tgZkocv7oNVwT/JLJRErE8XzF0MAo9aLJ0KzgjQojItehFeSMKxIIp8urQWmVCHMqlo6AiUJG8ZF0p9MBouzVxeN3j/cJh6Od/HOqP/ofLonK2SkbGmxMsYjHIBNilbjBLLySsJm1LrC4uuHYd6QRT0u3iK+uZYUa0wyx1YUcldOa5auFW3mrSpEiq7i27Y1ZNzAokoXlPF5pqmKJEF1NTnuek4kdI3lJFhqhV2EBBfZEjtsSRftdAHS6aHGxYvPHqUbSm1LKsZWXNltmj0m/3bISonS4p5UFUHnjTvmv/DJYBv5gOEry/7IbtNx0G06Wm4ygUbwBDkHzK6ueLayorYBiRq0imzMisROGX+Xq9DaBdNJVlTLp5SdrW8RtjW3/Jbh9E/W/LrYXVZX8H4y8DyYPvyCMqGCnFjwnAJm3e2pIidNq7PTwANI4HCQFNUB5tztrSQfr5x64urt95bXLAj0VdTMf+p47/5n+vsXg7phJ5Opqgwvdtnug6eufLm+Nug9mtp64Uhgvqvx8IHvVlbPGGJbT5wRd9UObK489n5/etrQuXmZBRTctG5mYuZLhy/0ClM+P9R7I2E6sOL4q5M/7jjQ/2Hn4Ztnt9asa1wR0s1DT78wdOuzK7630MXQn4Mr9e31Cz89lzrxvfTkvsvAfOVIw0en1k+a95rr6v4Loq32evu3dSd/6B08H9z587xr/de42PXwqncm1Rybcb53uvjIoZtvR7f1Tflq6sqBPTsumo+8vuebJbMa/vhgn3x578lfunb9dOndW7voaa+sCR4kJz62Y+7FcE9ZX9vXj/pP326dfLrv5dTgG18MRm+8uadnJzO/ee2Z3t3b7Xvr6Us/dgrbl+fW8i+esPb32RIAAA==" forHTTPHeaderField:@"Authorization"];
 	
 	// [urlRequest addValue:[self.request verb] forHTTPHeaderField:@"X-EBAY-SOA-OPERATION-NAME"];
 
@@ -353,15 +401,7 @@ NSString *URLEncode(NSString *string) {
 	// NSLog(@"[DEBUG] The data we have is %@", [[NSString alloc] initWithData:data encoding:NSASCIIStringEncoding]);
 	NSDictionary *result = [parser objectWithString:[[NSString alloc] initWithData:data encoding:NSASCIIStringEncoding]];
 
-
-
-for( NSString *aKey in [result allKeys] )
-{
-    // do something like a log:
-    NSLog(@"[EBayX] a key is %@", aKey);
-}
-
-
+	// TODO: blank queries currently error
 	if (result) {
 		// yay!
 		NSMutableArray *items = [[NSMutableArray alloc] init]; 
@@ -369,33 +409,47 @@ for( NSString *aKey in [result allKeys] )
 		if (itemsJson) {
 			NSLog(@"[EbayX] items: %lu", (unsigned long)[itemsJson count]);
 			for (int i = 0; i < (unsigned long)[itemsJson count]; i++) {
-				NSLog(@"[EbayX] Holy shiiiiit we have an item");
 				EBayItem *item = [[NSClassFromString(@"EBayItem") alloc] init];
 				NSDictionary *jsonItem = itemsJson[i];
 
-				// shippingInfo.shippingType
-				// NSString *shippingType = @"NotSpecified";
-				// if ([jsonItem[@"shippingOptions"][0][@"shippingCost"][@"currency"] isEqualToString:@""]) {
-				// 	shippingType = @"Free";
-				// } else if ([jsonItem[@"shippingOptions"][0][@"shippingCostType"] isEqualToString:@"FLAT"]) {
-				// 	shippingType = @"Flat";
-				// } else if ([jsonItem[@"shippingOptions"][0][@"shippingCostType"] isEqualToString:@"CALCULATED"]) {
-				// 	shippingType = @"Calculated";
-				// }
+				// sellerInfo.feedbackRatingStar
+				int score = [jsonItem[@"seller"][@"feedbackScore"] intValue];
+				NSString *starRating;
+				if (score >= 1000000) {
+					starRating = @"SilverShooting";
+				} else if (score >= 500000) {
+					starRating = @"GreenShooting";
+				} else if (score >= 100000) {
+					starRating = @"RedShooting";
+				} else if (score >= 50000) {
+					starRating = @"PurpleShooting";
+				} else if (score >= 25000) {
+					starRating = @"TurquoiseShooting";
+				} else if (score >= 10000) {
+					starRating = @"YellowShooting";
+				} else if (score >= 5000) {
+					starRating = @"Green";
+				} else if (score >= 1000) {
+					starRating = @"Red";
+				} else if (score >= 500) {
+					starRating = @"Purple";
+				} else if (score >= 100) {
+					starRating = @"Turquoise";
+				} else if (score >= 50) {
+					starRating = @"Blue";
+				} else if (score >= 10) {
+					starRating = @"Yellow";
+				} else {
+					starRating = @"None";
+				}
 
 
 				// sellingStatus.convertedCurrentPrice
 				NSDictionary *convertedCurrentPrice = nil;
 				if (jsonItem[@"price"][@"convertedFromCurrency"]) {
-					convertedCurrentPrice = @{
-						@"currencyId": jsonItem[@"price"][@"convertedFromCurrency"],
-						@"value": jsonItem[@"price"][@"convertedFromValue"],
-					};
+					convertedCurrentPrice = [[NSClassFromString(@"CurrencyAmount") alloc] initWithStringAmount:jsonItem[@"price"][@"convertedFromValue"] currencyID:jsonItem[@"price"][@"convertedFromCurrency"]];
 				} else {
-					convertedCurrentPrice = @{
-						@"currencyId": jsonItem[@"price"][@"currency"],
-						@"value": jsonItem[@"price"][@"value"],
-					};
+					convertedCurrentPrice = [[NSClassFromString(@"CurrencyAmount") alloc] initWithStringAmount:jsonItem[@"price"][@"value"] currencyID:jsonItem[@"price"][@"currency"]];
 				}
 
 				// sellingStatus.timeLeft
@@ -417,43 +471,77 @@ for( NSString *aKey in [result allKeys] )
 					listingType = @"Classified";
 				}
 
-				
+				NSDate *creationTime = FormatDate(jsonItem[@"itemCreationDate"]);
+				NSDate *currentTime = [NSDate date];
+				NSCalendar *calendar = [NSCalendar currentCalendar];
+
+				NSDate *startTime;
+				NSDate *endTime;
+
+				if (jsonItem[@"itemEndDate"]) {
+					startTime = creationTime;
+					endTime = FormatDate(jsonItem[@"itemEndDate"]);
+				} else {
+					// Calculate number of months between creation and now
+					NSDateComponents *diff = [calendar components:NSYearCalendarUnit | NSMonthCalendarUnit
+														fromDate:creationTime
+														toDate:currentTime
+														options:0];
+					NSInteger months = diff.month + diff.year * 12;
+
+					// Add that many months to creation
+					NSDateComponents *addMonths = [[NSDateComponents alloc] init];
+					addMonths.month = months;
+					NSDate *candidate = [calendar dateByAddingComponents:addMonths toDate:creationTime options:0];
+
+					// If candidate is after now, subtract one month
+					if ([candidate compare:currentTime] == NSOrderedDescending) {
+						addMonths.month = months - 1;
+						candidate = [calendar dateByAddingComponents:addMonths toDate:creationTime options:0];
+					}
+					startTime = candidate;
+
+					// End time is start time + 1 month - 10 seconds
+					NSDateComponents *plusOneMonth = [[NSDateComponents alloc] init];
+					plusOneMonth.month = 1;
+					NSDate *oneMonthLater = [calendar dateByAddingComponents:plusOneMonth toDate:startTime options:0];
+					endTime = [oneMonthLater dateByAddingTimeInterval:-10];
+				}
+
+				// sellingStatus.timeLeft
+				NSString *timeLeft = @"P0DT0H0M0S";
+				if ([[[NSDate date] laterDate:endTime] isEqualToDate:endTime]) { // i struggle with less than and greater than.
+					// i hate time
+					timeLeft = iso8601DurationMaker(startTime, endTime);
+				}
+
 
 				// listingInfo
 				NSMutableDictionary *listingInfo = [@{
 					@"buyItNowAvailable": @(buyItNowAvailable),
 					@"bestOfferEnabled": @([jsonItem[@"buyingOptions"] containsObject:@"BEST_OFFER"]),
 					@"listingType": listingType,
-					@"startTime": @"2024-06-12T17:47:51.000Z", // TODO
-					@"endTime": @"2026-06-12T17:47:51.000Z", // TODO
+					@"startTime": startTime,
+					@"endTime": endTime,
 					@"gift": @NO
 
 				} mutableCopy];
 
 				if (buyItNowAvailable) {
-					listingInfo[@"buyItNowPrice"] = @{
-						@"currencyId": jsonItem[@"price"][@"currency"],
-						@"value": jsonItem[@"price"][@"value"],
-					};
+					listingInfo[@"buyItNowPrice"] = [[NSClassFromString(@"CurrencyAmount") alloc] initWithStringAmount:jsonItem[@"price"][@"value"] currencyID:jsonItem[@"price"][@"currency"]];
 
 					if (jsonItem[@"price"][@"convertedFromCurrency"]) {
-						listingInfo[@"convertedBuyItNowPrice"] = @{
-							@"currencyId": jsonItem[@"price"][@"convertedFromCurrency"],
-							@"value": jsonItem[@"price"][@"convertedFromValue"],
-						};
+						listingInfo[@"convertedBuyItNowPrice"] = [[NSClassFromString(@"CurrencyAmount") alloc] initWithStringAmount:jsonItem[@"price"][@"convertedFromValue"] currencyID:jsonItem[@"price"][@"convertedFromCurrency"]];
 					} else {
-						listingInfo[@"convertedBuyItNowPrice"] = @{
-							@"currencyId": jsonItem[@"price"][@"currency"],
-							@"value": jsonItem[@"price"][@"value"],
-						};
+						listingInfo[@"convertedBuyItNowPrice"] = [[NSClassFromString(@"CurrencyAmount") alloc] initWithStringAmount:jsonItem[@"price"][@"value"] currencyID:jsonItem[@"price"][@"currency"]];
 					}
 				}
+				NSLog(@"[DEBUG] Currency ID is %@", [[[NSClassFromString(@"CurrencyAmount") alloc] initWithStringAmount:jsonItem[@"price"][@"value"] currencyID:jsonItem[@"price"][@"currency"]] currencyID]);
 
 				// combine everything into one mega dictionary.
 				NSMutableDictionary *itemBase = [@{
 					@"itemId": jsonItem[@"legacyItemId"],
 					@"title": jsonItem[@"title"],
-					// @"globalId": jsonItem[@"listingMarketplaceId"],
 					@"primaryCategory": @{
 						@"categoryId": jsonItem[@"categories"][0][@"categoryId"],
 						@"categoryName": jsonItem[@"categories"][0][@"categoryName"],
@@ -461,34 +549,57 @@ for( NSString *aKey in [result allKeys] )
 					@"galleryURL": jsonItem[@"image"][@"imageUrl"],
 					@"viewItemURL": jsonItem[@"itemWebUrl"],
 					@"autopay": @YES, // todo figure this out
-					// @"shippingInfo": @{
-					// 	@"shippingType": shippingType,
-					// 	@"shippingServiceCost": @{
-					// 		@"currencyId": jsonItem[@"shippingOptions"][0][@"shippingCost"][@"currency"],
-					// 		@"value": jsonItem[@"shippingOptions"][0][@"shippingCost"][@"value"],
-					// 	}
-					// },
-					@"sellingStatus": @{
-						// @"bidCount": jsonItem[@"bidCount"],
-						@"currentPrice": @{
-							@"currencyId": jsonItem[@"price"][@"currency"],
-							@"value": jsonItem[@"price"][@"value"],
-						},
-						@"convertedCurrentPrice": convertedCurrentPrice,
-						@"sellingState": @"Active", // previous me said that this was a cheat. idk why.
-						@"timeLeft": @"P0DT0H1M0S",
-
-					},
+					
 					@"listingInfo": listingInfo,
 					@"sellerInfo": @{
 						@"feedbackScore": jsonItem[@"seller"][@"feedbackScore"],
 						@"positiveFeedbackPercent": jsonItem[@"seller"][@"feedbackPercentage"],
 						@"sellerUserName": jsonItem[@"seller"][@"username"],
-						@"topRatedSeller": @NO, // temp
-						@"feedbackRatingStar": @"RedShooting",
+						@"topRatedSeller": @NO, // this isn't publically accessible in the new api so ig no one is :D
+						@"feedbackRatingStar": starRating,
 					},
 
 				} mutableCopy];
+
+				NSMutableDictionary *sellingStatus = [@{
+					
+					@"currentPrice": [[NSClassFromString(@"CurrencyAmount") alloc] initWithStringAmount:jsonItem[@"price"][@"value"] currencyID:jsonItem[@"price"][@"currency"]],
+					@"convertedCurrentPrice": convertedCurrentPrice,
+					@"sellingState": @"Active", // previous me said that this was a cheat. idk why.
+					@"timeLeft": timeLeft,
+
+				} mutableCopy];
+				if (jsonItem[@"bidCount"]) {
+					sellingStatus[@"bidCount"] = jsonItem[@"bidCount"];
+				}
+				itemBase[@"sellingStatus"] = sellingStatus;
+
+				if (jsonItem[@"shippingOptions"] && [jsonItem[@"shippingOptions"] count] > 0) {
+					// shippingInfo.shippingType
+					NSString *shippingType = @"NotSpecified";
+					if (!jsonItem[@"shippingOptions"][0][@"shippingCost"][@"currency"] && !jsonItem[@"shippingOptions"][0][@"shippingCost"][@"value"]) {
+						shippingType = @"Free";
+					} else if ([jsonItem[@"shippingOptions"][0][@"shippingCostType"] isEqualToString:@"FLAT"]) {
+						shippingType = @"Flat";
+					} else if ([jsonItem[@"shippingOptions"][0][@"shippingCostType"] isEqualToString:@"CALCULATED"]) {
+						shippingType = @"Calculated";
+					}
+
+					itemBase[@"shippingType"] = shippingType;
+
+					NSMutableDictionary *shippingInfo = [@{
+						@"shippingType": shippingType,
+					} mutableCopy];
+					if (![shippingType isEqualToString:@"Free"]) {
+						shippingInfo[@"shippingServiceCost"] = [[NSClassFromString(@"CurrencyAmount") alloc] initWithStringAmount:jsonItem[@"shippingOptions"][0][@"shippingCost"][@"value"] currencyID:jsonItem[@"shippingOptions"][0][@"shippingCost"][@"currency"]];
+					}
+
+					itemBase[@"shippingInfo"] = shippingInfo;
+				}
+
+				if (jsonItem[@"listingMarketplaceId"]) {
+					itemBase[@"globalId"] = jsonItem[@"listingMarketplaceId"];
+				}
 
 				NSString *postalCode = jsonItem[@"itemLocation"][@"postalCode"];
 				if (postalCode) {
@@ -511,13 +622,37 @@ for( NSString *aKey in [result allKeys] )
 
 				// finish!
                 [item setValue:itemBase forKey:@"itemInfo"];
+				[item setItemOrigin:19];
+				[item setApiType:1];
 				[items addObject:item];
 			}
 			self.items = items;
-			[self setAck:@"Success"];
+			
+
+
+			/// Now time for the rest of the body
+			[self setValue:@{
+				@"xmlns": @"http://www.ebay.com/marketplace/search/v1/services",
+				@"ack": @"Success",
+				@"version": @"1.13.0",
+				@"timestamp":  [NSDate date],
+				@"searchResult": @{
+					@"count": @([self.items count]),
+					@"items": self.items,
+				},
+				@"paginationOutput": @{
+					@"entriesPerPage": @([result[@"limit"] intValue]),
+					@"pageNumber": @([result[@"offset"] intValue]/[result[@"limit"] intValue]),
+					@"totalEntries": @([result[@"total"] intValue]),
+					@"totalPages": @([result[@"total"] intValue]/[result[@"limit"] intValue]),
+				},
+			} forKey:@"findItemsDict"];
+			
+
 		} else {
 			NSLog(@"[EBayX] getting items has failed");
 		}
+		[self setAck:@"Success"];
 	} else {
 		NSLog(@"[EBayX] JSON parsing failed :(");
 	}

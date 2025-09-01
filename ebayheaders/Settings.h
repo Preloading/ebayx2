@@ -5,8 +5,9 @@
  */
 
 #import <Foundation/Foundation.h>
+#import "EbaySite.h"
 
-@class EbaySite, EbayUser;
+@class EbayUser;
 
 @interface Settings : NSObject
 {
