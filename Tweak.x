@@ -6,7 +6,15 @@
 #import "ebayheaders/Settings.h"
 #import "ebayheaders/EBayItem.h"
 #import "sbjson/JSON.h"
+#import "NewOAuthManager.h"
 #import <curl/curl.h>
+
+#ifndef APP_ID
+#define APP_ID @"fallback"
+#endif
+#ifndef CERT_ID
+#define CERT_ID @"fallback"
+#endif
 
 NSString *URLEncode(NSString *string) {
     return (__bridge_transfer NSString *)
@@ -368,7 +376,7 @@ NSString *iso8601DurationMaker(NSDate *startDate, NSDate *endDate) {
 
 	[urlRequest addValue:[settings appID] forHTTPHeaderField:@"X-EBAY-SOA-SECURITY-APPNAME"];
 	[urlRequest addValue:[[settings currentSite] globalID] forHTTPHeaderField:@"X-EBAY-C-MARKETPLACE-ID"];
-	[urlRequest addValue:@"Bearer v^1.1#i^1#I^3#p^1#r^0#f^0#t^H4sIAAAAAAAA/+VYbWxTVRhe9ylhGyhEYPCjXBD5sO25vb39uK7FQhkrbGtZK+DA4P04XS+7vbfccy+lhmgZcdNMQjBo1IWwRAhoTFxI0JgQUISB+AP9oRhIQEkwkADRoNGYkHhuW0Y3CUNWYxP7pznvec97nuc573vOuQdkqics7Gnu+b3OVFM+kAGZcpOJnAgmVFctqq8ob6gqAwUOpoHM3Exld8XVRsQmpCTTDlFSkRE0b0lIMmKyRi+hqzKjsEhEjMwmIGI0non4W1sYuxUwSVXRFF6RCHMw4CU8gCI56OadkHWzJKCxVb4TM6p4CZp28BxP006K9jgogcP9COkwKCONlTUvYQd22gI8FkBGgYNxkAxFWWnK1UGYV0MViYqMXayA8GXhMtmxagHW+0NlEYKqhoMQvqC/KRLyBwPL2qKNtoJYvrwOEY3VdDSytVQRoHk1K+nw/tOgrDcT0XkeIkTYfLkZRgZl/HfAPAT8rNQUxwIXxfNuzk5ywOEuipRNippgtfvjMCyiYIllXRkoa6KWHktRrAa3EfJavtWGQwQDZuNvlc5KYkyEqpdYtsT/nD8cJnwrlLiMkWgWyMcVjk3HLOH2gMXudMZcHgG4sdlBU3bBnp8oFy0v86iZliqyIBqiIXOboi2BGDUcrQ1VoA12Cskh1R/TDESFfs47Gto9Hcai5lZR1+Kysa4wgYUwZ5tjr8DwaE1TRU7X4HCE0R1ZibwEm0yKAjG6M5uL+fTZgrxEXNOSjM2WSqWsKcqqqJ02OwCkbW1rS4SPwwRLYF+j1nP+4tgDLGKWCg/xSCQyWjqJsWzBuYoByJ2EjyYpF3DndR8Jyzfa+jdDAWfbyIooVoU4yBh0CtBJARcNSNJTjArx5ZPUZuCAODctCVbtglpSYnlo4XGe6QmoigJD0TE75Y5Bi+D0xCwOTyxm4WjBacGYIICQ43iP+/9UKA+a6hHIq1ArSq4XLc/1CFyVEoSOQPTF5ZxAudEiYW18U2gTxzbZQdoZWdTeGuc3tgZkocv7oNVwT/JLJRErE8XzF0MAo9aLJ0KzgjQojItehFeSMKxIIp8urQWmVCHMqlo6AiUJG8ZF0p9MBouzVxeN3j/cJh6Od/HOqP/ofLonK2SkbGmxMsYjHIBNilbjBLLySsJm1LrC4uuHYd6QRT0u3iK+uZYUa0wyx1YUcldOa5auFW3mrSpEiq7i27Y1ZNzAokoXlPF5pqmKJEF1NTnuek4kdI3lJFhqhV2EBBfZEjtsSRftdAHS6aHGxYvPHqUbSm1LKsZWXNltmj0m/3bISonS4p5UFUHnjTvmv/DJYBv5gOEry/7IbtNx0G06Wm4ygUbwBDkHzK6ueLayorYBiRq0imzMisROGX+Xq9DaBdNJVlTLp5SdrW8RtjW3/Jbh9E/W/LrYXVZX8H4y8DyYPvyCMqGCnFjwnAJm3e2pIidNq7PTwANI4HCQFNUB5tztrSQfr5x64urt95bXLAj0VdTMf+p47/5n+vsXg7phJ5Opqgwvdtnug6eufLm+Nug9mtp64Uhgvqvx8IHvVlbPGGJbT5wRd9UObK489n5/etrQuXmZBRTctG5mYuZLhy/0ClM+P9R7I2E6sOL4q5M/7jjQ/2Hn4Ztnt9asa1wR0s1DT78wdOuzK7630MXQn4Mr9e31Cz89lzrxvfTkvsvAfOVIw0en1k+a95rr6v4Loq32evu3dSd/6B08H9z587xr/de42PXwqncm1Rybcb53uvjIoZtvR7f1Tflq6sqBPTsumo+8vuebJbMa/vhgn3x578lfunb9dOndW7voaa+sCR4kJz62Y+7FcE9ZX9vXj/pP326dfLrv5dTgG18MRm+8uadnJzO/ee2Z3t3b7Xvr6Us/dgrbl+fW8i+esPb32RIAAA==" forHTTPHeaderField:@"Authorization"];
+	[urlRequest addValue:[NSString stringWithFormat:@"Bearer %@", [[NewOAuthManager sharedManager] currentToken]] forHTTPHeaderField:@"Authorization"];
 	
 	// [urlRequest addValue:[self.request verb] forHTTPHeaderField:@"X-EBAY-SOA-OPERATION-NAME"];
 
@@ -401,7 +409,6 @@ NSString *iso8601DurationMaker(NSDate *startDate, NSDate *endDate) {
 	// NSLog(@"[DEBUG] The data we have is %@", [[NSString alloc] initWithData:data encoding:NSASCIIStringEncoding]);
 	NSDictionary *result = [parser objectWithString:[[NSString alloc] initWithData:data encoding:NSASCIIStringEncoding]];
 
-	// TODO: blank queries currently error
 	if (result) {
 		// yay!
 		NSMutableArray *items = [[NSMutableArray alloc] init]; 
@@ -628,8 +635,6 @@ NSString *iso8601DurationMaker(NSDate *startDate, NSDate *endDate) {
 			}
 			self.items = items;
 			
-
-
 			/// Now time for the rest of the body
 			[self setValue:@{
 				@"xmlns": @"http://www.ebay.com/marketplace/search/v1/services",
@@ -679,13 +684,15 @@ NSString *iso8601DurationMaker(NSDate *startDate, NSDate *endDate) {
 
 %end
 
+// Misc. URL hooks
 
-%hook Settings
-
-- (id)appID {
-	return @"JohnFort-echobayf-PRD-266f79d08-ec4532d2"; // New API APPID, temp from special head
+%hook GetSingleItemRequest
+-(id)apiURL {
+	return [NSURL URLWithString:@"https://open.api.ebay.com/shopping"];
+	// id orig = %orig;
+	// NSLog(@"[DEBUG] This url is %@", orig);
+	// return orig;
 }
-
 %end
 
 // haha, turns out ebay only support TLSv1.0. And it uses a **custom** http sender. thats fun. I don't like it, so lets replace it with curl. AI sadly, i dont get C :(
@@ -721,6 +728,16 @@ static size_t headerCallback(char *buffer, size_t size, size_t nitems, void *use
                  returningResponse:(NSURLResponse **)response
                              error:(NSError **)error
 {
+	// 		void *callstack[128];
+	// int frames = backtrace(callstack, 128);
+	// char **symbols = backtrace_symbols(callstack, frames);
+	// NSMutableString *callstackString = [@"[EbayX] Callstack for curl:\n" mutableCopy];
+	// for (int i = 0; i < frames; i++) {
+	// 	[callstackString appendFormat:@"%s\n", symbols[i]];
+	// }
+	// NSLog(@"%@", callstackString);
+	
+	// free(symbols);
     CURL *curl = curl_easy_init();
     if (!curl) {
         if (error) {
@@ -815,3 +832,7 @@ static size_t headerCallback(char *buffer, size_t size, size_t nitems, void *use
 }
 
 %end
+
+%ctor {
+	[[NewOAuthManager sharedManager] refreshTokenInBackground];
+}
