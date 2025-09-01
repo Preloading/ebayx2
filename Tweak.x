@@ -64,6 +64,22 @@ NSString *iso8601DurationMaker(NSDate *startDate, NSDate *endDate) {
     return [NSString stringWithFormat:@"P%ldDT%ldH%ldM%ldS", (long)days, (long)hours, (long)minutes, (long)seconds];
 }
 
+NSString *StripKeyValuePairs(NSString *input) {
+    NSError *error = nil;
+    // Pattern: one or more word chars, colon, one or more non-space chars
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"\\b\\w+:[^\\s]+\\b"
+                                                                           options:0
+                                                                             error:&error];
+    NSString *result = [regex stringByReplacingMatchesInString:input
+                                                      options:0
+                                                        range:NSMakeRange(0, input.length)
+                                                 withTemplate:@""];
+    // Remove extra spaces left behind
+    result = [result stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    result = [result stringByReplacingOccurrencesOfString:@"  " withString:@" "];
+    return result;
+}
+
 
 // %hook NSURL
 // // + (instancetype)URLWithString:(NSString *)URLString {
@@ -89,6 +105,12 @@ NSString *iso8601DurationMaker(NSDate *startDate, NSDate *endDate) {
 
 
 // -[FSFindItemsAdvancedRequest apiURL]
+
+%hook Settings
+-(id)shoppingAPI {
+	return @"https://open.api.ebay.com/shopping";
+}
+%end
 
 %hook FSFindItemsAdvancedRequest
 
@@ -164,8 +186,9 @@ NSString *iso8601DurationMaker(NSDate *startDate, NSDate *endDate) {
 	}
 
 	if (self.sellerID && [self.sellerID length] > 0) {
-		u=[u stringByAppendingString:[NSString stringWithFormat:@"seller={%@}&", self.sellerID]]; // TODO: Escape this
+		[filters addObject:[NSString stringWithFormat:@"sellers={%@}", self.sellerID]];
     }
+	
 
 	// Country search
 
@@ -234,7 +257,12 @@ NSString *iso8601DurationMaker(NSDate *startDate, NSDate *endDate) {
 		u=[u stringByAppendingString:[NSString stringWithFormat:@"filter=%@&", URLEncode([filters componentsJoinedByString:@","])]];
 	}
 
-	u=[u stringByAppendingString:[NSString stringWithFormat:@"q=%@&", URLEncode(self.query) ]];
+	NSString *query = StripKeyValuePairs(self.query); // removes seller:
+
+	if (query) {
+		u=[u stringByAppendingString:[NSString stringWithFormat:@"q=%@&", URLEncode(query) ]];
+	}
+	
 
 	// GET https://api.ebay.com/buy/browse/v1/item_summary/search?
 	// q=string&
@@ -313,7 +341,6 @@ NSString *iso8601DurationMaker(NSDate *startDate, NSDate *endDate) {
 	// NSLog(@"%@", callstackString);
 	
 	// free(symbols);
-	// return %orig;
 
 	int apiType = [self.request apiType];
 	if (apiType < 100) {
@@ -391,19 +418,6 @@ NSString *iso8601DurationMaker(NSDate *startDate, NSDate *endDate) {
 
 %hook FSFindItemsAdvancedResponse
 - (void)parseData:(NSData *)data {
-	// void *callstack[128];
-	// int frames = backtrace(callstack, 128);
-	// char **symbols = backtrace_symbols(callstack, frames);
-	// NSMutableString *callstackString = [@"[EbayX] Callstack for xml builder:\n" mutableCopy];
-	// for (int i = 0; i < frames; i++) {
-	// 	[callstackString appendFormat:@"%s\n", symbols[i]];
-	// }
-	// NSLog(@"%@", callstackString);
-	
-	// free(symbols);
-	
-	// return %orig;
-
 	SBJsonParser *parser = [[SBJsonParser alloc] init];
 
 	// NSLog(@"[DEBUG] The data we have is %@", [[NSString alloc] initWithData:data encoding:NSASCIIStringEncoding]);
@@ -684,16 +698,7 @@ NSString *iso8601DurationMaker(NSDate *startDate, NSDate *endDate) {
 
 %end
 
-// Misc. URL hooks
 
-%hook GetSingleItemRequest
--(id)apiURL {
-	return [NSURL URLWithString:@"https://open.api.ebay.com/shopping"];
-	// id orig = %orig;
-	// NSLog(@"[DEBUG] This url is %@", orig);
-	// return orig;
-}
-%end
 
 // haha, turns out ebay only support TLSv1.0. And it uses a **custom** http sender. thats fun. I don't like it, so lets replace it with curl. AI sadly, i dont get C :(
 %hook URLConnectionCF
@@ -728,16 +733,16 @@ static size_t headerCallback(char *buffer, size_t size, size_t nitems, void *use
                  returningResponse:(NSURLResponse **)response
                              error:(NSError **)error
 {
-	// 		void *callstack[128];
-	// int frames = backtrace(callstack, 128);
-	// char **symbols = backtrace_symbols(callstack, frames);
-	// NSMutableString *callstackString = [@"[EbayX] Callstack for curl:\n" mutableCopy];
-	// for (int i = 0; i < frames; i++) {
-	// 	[callstackString appendFormat:@"%s\n", symbols[i]];
-	// }
-	// NSLog(@"%@", callstackString);
+			void *callstack[128];
+	int frames = backtrace(callstack, 128);
+	char **symbols = backtrace_symbols(callstack, frames);
+	NSMutableString *callstackString = [@"[EbayX] Callstack for xml builder:\n" mutableCopy];
+	for (int i = 0; i < frames; i++) {
+		[callstackString appendFormat:@"%s\n", symbols[i]];
+	}
+	NSLog(@"%@", callstackString);
 	
-	// free(symbols);
+	free(symbols);
     CURL *curl = curl_easy_init();
     if (!curl) {
         if (error) {
@@ -825,6 +830,7 @@ static size_t headerCallback(char *buffer, size_t size, size_t nitems, void *use
 
 // 	NSLog(@"[EbayX] req good!");
 
+	NSLog(@"[DEBUG] url = %@", request.URL);
 // 	NSString *responseString = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding];
 // NSLog(@"[EbayX] Response Body:\n%@", responseString);
 

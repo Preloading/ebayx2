@@ -110,6 +110,7 @@
     
     [request setHTTPMethod:@"POST"];
     [request addValue:[NSString stringWithFormat:@"Basic %@", encodedTokenData] forHTTPHeaderField:@"Authorization"];
+    [request addValue:[NSString stringWithFormat:@"application/x-www-form-urlencoded"] forHTTPHeaderField:@"Content-Type"];
     [request setHTTPBody:[@"grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope" dataUsingEncoding:NSUTF8StringEncoding]];
     
     NSURLResponse *response = nil;
