@@ -2,7 +2,7 @@ Package: dev.preloading.ebayx2
 Name: EBayX²
 Version: 0.0.1
 Architecture: iphoneos-arm
-Description: A tweak that replaces the deprecated FindingAPI, with the new BrowseAPI.
+Description: A cydia tweak that fixes the eBay app.
 Maintainer: Preloading
 Author: Preloading
 Section: Tweaks

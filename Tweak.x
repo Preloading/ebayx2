@@ -135,14 +135,7 @@ NSString *StripKeyValuePairs(NSString *input) {
        u=[u stringByAppendingString:@"sort=newlyListed&"];
     }
 
-	// this doesn't look ever used?
-	[self validateItemTypes];
-	// NSMutableArray *itemTypeArray = [self valueForKey:@"itemTypeArray"];
-	// if (itemTypeArray && itemTypeArray.count > 0) {
-	// 	for (int i = 0; i > itemTypeArray.count; i++) {
-	// 		NSLog(@"[EbayX] Item Type Array: %@", itemTypeArray[i]);
-	// 	}
-    // }
+	
 
 	NSMutableArray *aspectFilter = [[NSMutableArray alloc] init];
 
@@ -151,12 +144,33 @@ NSString *StripKeyValuePairs(NSString *input) {
 		[filters addObject:@"searchInDescription:true"];
 	}
 
+	[self validateItemTypes];
+
+	bool hasAlreadyDoneAuction = false;
+	NSMutableArray *itemTypeArray = [self valueForKey:@"itemTypeArray"];
+	NSMutableArray *buyingOptions = [[NSMutableArray alloc] init];
+	if (itemTypeArray && itemTypeArray.count > 0) {
+		for (int i = 0; i < itemTypeArray.count; i++) {
+			// NSLog(@"[EbayX] it's %@ yayayayayayay", itemTypeArray[i]);
+			if (([itemTypeArray[i] isEqualToString:@"Auction"] || [itemTypeArray[i] isEqualToString:@"AuctionWithBIN"]) && !hasAlreadyDoneAuction) {
+				[buyingOptions addObject:@"AUCTION"];
+				hasAlreadyDoneAuction = true;
+			} else if ([itemTypeArray[i] isEqualToString:@"Classified"]) {
+				[buyingOptions addObject:@"CLASSIFIED_AD"];
+			} else if ([itemTypeArray[i] isEqualToString:@"FixedPrice"]) {
+				[buyingOptions addObject:@"FIXED_PRICE"];
+			}
+		}
+    }
+	if ([buyingOptions count] > 0) {
+		[filters addObject:[NSString stringWithFormat:@"buyingOptions:{%@}", [buyingOptions componentsJoinedByString:@"|"]]];
+	}
+
 	NSLog(@"[EBayX] category id is class of %@", [self.categoryID class]);
 	if (self.categoryID && [self.categoryID length] > 0) {
 		u=[u stringByAppendingString:[NSString stringWithFormat:@"category_ids=%@&", self.categoryID]];
 		[aspectFilter addObject:[NSString stringWithFormat:@"categoryId:%@", self.categoryID]];
 	}
-
 
 	// Histograms
 	NSMutableArray *histograms = [[NSMutableArray alloc] init];
