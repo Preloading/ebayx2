@@ -16,6 +16,8 @@
 #define CERT_ID @"fallback"
 #endif
 
+#define kIsDebuggingResponce true
+
 #define kBundlePath @"/Library/Application Support/dev.preloading.ebayx2"
 
 NSString *URLEncode(NSString *string) {
@@ -582,7 +584,6 @@ NSString *StripKeyValuePairs(NSString *input) {
 						@"categoryId": jsonItem[@"categories"][0][@"categoryId"],
 						@"categoryName": jsonItem[@"categories"][0][@"categoryName"],
 					},
-					@"galleryURL": jsonItem[@"image"][@"imageUrl"],
 					@"viewItemURL": jsonItem[@"itemWebUrl"],
 					@"autopay": @YES, // todo figure this out
 					
@@ -596,6 +597,9 @@ NSString *StripKeyValuePairs(NSString *input) {
 					},
 
 				} mutableCopy];
+				if (jsonItem[@"image"][@"imageUrl"]) {
+					itemBase[@"galleryURL"] = jsonItem[@"image"][@"imageUrl"];
+				}
 
 				NSMutableDictionary *sellingStatus = [@{
 					
