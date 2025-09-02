@@ -16,6 +16,8 @@
 #define CERT_ID @"fallback"
 #endif
 
+#define kBundlePath @"/Library/Application Support/dev.preloading.ebayx2"
+
 NSString *URLEncode(NSString *string) {
     return (__bridge_transfer NSString *)
         CFURLCreateStringByAddingPercentEscapes(
@@ -166,7 +168,6 @@ NSString *StripKeyValuePairs(NSString *input) {
 		[filters addObject:[NSString stringWithFormat:@"buyingOptions:{%@}", [buyingOptions componentsJoinedByString:@"|"]]];
 	}
 
-	NSLog(@"[EBayX] category id is class of %@", [self.categoryID class]);
 	if (self.categoryID && [self.categoryID length] > 0) {
 		u=[u stringByAppendingString:[NSString stringWithFormat:@"category_ids=%@&", self.categoryID]];
 		[aspectFilter addObject:[NSString stringWithFormat:@"categoryId:%@", self.categoryID]];
@@ -292,7 +293,7 @@ NSString *StripKeyValuePairs(NSString *input) {
 	// offset=string&
 	// aspect_filter=AspectFilter&
 	// epid=string&
-	NSLog(@"[EBayX] URLS are: %@", u);
+	// NSLog(@"[EBayX] URLS are: %@", u);
 	// return [NSURL URLWithString:u];
 	return u;
 }
@@ -364,9 +365,9 @@ NSString *StripKeyValuePairs(NSString *input) {
 
 	id settings = [NSClassFromString(@"Settings") performSelector:@selector(sharedSettings)]; // it wont import
 // NSLog(@"[DEBUG] target: %@, action: %@", self.target, NSStringFromSelector(self.action));
-	NSLog(@"[DEBUG] Responce Class: %@", [self.request responseClass]);
+	// NSLog(@"[DEBUG] Responce Class: %@", [self.request responseClass]);
 
-	NSLog(@"[EbayX] setup da request: %@", [[self.request apiURL] class]);
+	// NSLog(@"[EbayX] setup da request: %@", [[self.request apiURL] class]);
 	// return %orig;
 	// if ([[self.request apiURL] isEqualToString:@"http://svcs.ebay.com/services/search/FindingService/v1"]) { // Finding service
 	// 	// NSLog(@"[EbayX] We get to replace this request! EbayAPIThingy: %d", [self.request apiType]);
@@ -571,7 +572,7 @@ NSString *StripKeyValuePairs(NSString *input) {
 						listingInfo[@"convertedBuyItNowPrice"] = [[NSClassFromString(@"CurrencyAmount") alloc] initWithStringAmount:jsonItem[@"price"][@"value"] currencyID:jsonItem[@"price"][@"currency"]];
 					}
 				}
-				NSLog(@"[DEBUG] Currency ID is %@", [[[NSClassFromString(@"CurrencyAmount") alloc] initWithStringAmount:jsonItem[@"price"][@"value"] currencyID:jsonItem[@"price"][@"currency"]] currencyID]);
+				// NSLog(@"[DEBUG] Currency ID is %@", [[[NSClassFromString(@"CurrencyAmount") alloc] initWithStringAmount:jsonItem[@"price"][@"value"] currencyID:jsonItem[@"price"][@"currency"]] currencyID]);
 
 				// combine everything into one mega dictionary.
 				NSMutableDictionary *itemBase = [@{
@@ -747,16 +748,16 @@ static size_t headerCallback(char *buffer, size_t size, size_t nitems, void *use
                  returningResponse:(NSURLResponse **)response
                              error:(NSError **)error
 {
-			void *callstack[128];
-	int frames = backtrace(callstack, 128);
-	char **symbols = backtrace_symbols(callstack, frames);
-	NSMutableString *callstackString = [@"[EbayX] Callstack for xml builder:\n" mutableCopy];
-	for (int i = 0; i < frames; i++) {
-		[callstackString appendFormat:@"%s\n", symbols[i]];
-	}
-	NSLog(@"%@", callstackString);
+	// 		void *callstack[128];
+	// int frames = backtrace(callstack, 128);
+	// char **symbols = backtrace_symbols(callstack, frames);
+	// NSMutableString *callstackString = [@"[EbayX] Callstack for xml builder:\n" mutableCopy];
+	// for (int i = 0; i < frames; i++) {
+	// 	[callstackString appendFormat:@"%s\n", symbols[i]];
+	// }
+	// NSLog(@"%@", callstackString);
 	
-	free(symbols);
+	// free(symbols);
     CURL *curl = curl_easy_init();
     if (!curl) {
         if (error) {
@@ -770,7 +771,11 @@ static size_t headerCallback(char *buffer, size_t size, size_t nitems, void *use
     NSMutableData *responseData = [NSMutableData data];
     NSMutableDictionary *responseHeaders = [NSMutableDictionary dictionary];
 
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L); // TODO: make it actually secure lmao. Currently we get error 60, SSL error, but it does pass if we don't verify soo yeah.
+
+	// SSL Shenanigans
+    const char *caPath = [[NSString stringWithFormat:@"%@/cacert.pem", kBundlePath] UTF8String];
+    curl_easy_setopt(curl, CURLOPT_CAINFO, caPath);
+	// curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L); // potentially useful with a proxy
 
     // URL
     curl_easy_setopt(curl, CURLOPT_URL, [[request.URL absoluteString] UTF8String]);
@@ -844,11 +849,11 @@ static size_t headerCallback(char *buffer, size_t size, size_t nitems, void *use
 
 // 	NSLog(@"[EbayX] req good!");
 
-	NSLog(@"[DEBUG] url = %@", request.URL);
+	// NSLog(@"[DEBUG] curl url = %@", request.URL);
 // 	NSString *responseString = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding];
-// NSLog(@"[EbayX] Response Body:\n%@", responseString);
+// NSLog(@"[EbayX] HTTP Code %ld, Response Body:\n%@", httpCode, responseString);
 
-    return responseData;
+    return responseData; 
 }
 
 %end
