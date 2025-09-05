@@ -1,9 +1,12 @@
 Package: dev.preloading.ebayx2
 Name: EBayX²
-Version: 0.0.1
+Version: 1.0.0
 Architecture: iphoneos-arm
-Description: A cydia tweak that fixes the eBay app.
+Description: A tweak that fixes the eBay app.
 Maintainer: Preloading
-Author: Preloading
+Author: Preloading <me@preloading.dev>
 Section: Tweaks
 Depends: mobilesubstrate (>= 0.9.5000)
+Homepage: https://cydia.preloading.dev/depictions/ebayx2/1.0/
+Depiction: https://cydia.preloading.dev/depictions/ebayx2/1.0/
+Conflicts: com.ixmoe.1pwn.ebayx
