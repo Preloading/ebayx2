@@ -69,19 +69,20 @@ NSString *iso8601DurationMaker(NSDate *startDate, NSDate *endDate) {
 }
 
 NSString *StripKeyValuePairs(NSString *input) {
-    NSError *error = nil;
-    // Pattern: one or more word chars, colon, one or more non-space chars
-    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"\\b\\w+:[^\\s]+\\b"
-                                                                           options:0
-                                                                             error:&error];
-    NSString *result = [regex stringByReplacingMatchesInString:input
-                                                      options:0
-                                                        range:NSMakeRange(0, input.length)
-                                                 withTemplate:@""];
-    // Remove extra spaces left behind
-    result = [result stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    result = [result stringByReplacingOccurrencesOfString:@"  " withString:@" "];
-    return result;
+	// Split the input into words
+	NSArray *words = [input componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	NSMutableArray *filteredWords = [NSMutableArray array];
+	for (NSString *word in words) {
+		NSRange colonRange = [word rangeOfString:@":"];
+		if (colonRange.location == NSNotFound || colonRange.location == 0 || colonRange.location == word.length - 1) {
+			// Keep words that do not look like key:value
+			if ([word length] > 0) {
+				[filteredWords addObject:word];
+			}
+		}
+	}
+	NSString *result = [filteredWords componentsJoinedByString:@" "];
+	return [result stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 }
 
 
