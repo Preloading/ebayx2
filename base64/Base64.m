@@ -54,14 +54,74 @@
     
     if (![NSData instancesRespondToSelector:@selector(initWithBase64EncodedString:options:)])
     {
-        decoded = [[self alloc] initWithBase64Encoding:[string stringByReplacingOccurrencesOfString:@"[^A-Za-z0-9+/=]" withString:@"" options:NSRegularExpressionSearch range:NSMakeRange(0, [string length])]];
+        // Call legacy -initWithBase64Encoding: dynamically to avoid compile-time errors on newer SDKs
+        SEL legacySel = NSSelectorFromString(@"initWithBase64Encoding:");
+        if ([self instancesRespondToSelector:legacySel])
+        {
+            id instance = [self alloc];
+            NSMethodSignature *sig = [self instanceMethodSignatureForSelector:legacySel];
+            NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+            [inv setSelector:legacySel];
+            [inv setTarget:instance];
+            NSString *clean = [string stringByReplacingOccurrencesOfString:@"[^A-Za-z0-9+/=]" withString:@"" options:NSRegularExpressionSearch range:NSMakeRange(0, [string length])];
+            [inv setArgument:&clean atIndex:2];
+            [inv invoke];
+            __unsafe_unretained id result = nil;
+            [inv getReturnValue:&result];
+            decoded = result;
+        }
+        else
+        {
+            decoded = nil;
+        }
     }
     else
     
 #endif
         
     {
-        decoded = [[self alloc] initWithBase64EncodedString:string options:NSDataBase64DecodingIgnoreUnknownCharacters];
+        // Call initWithBase64EncodedString:options: dynamically to avoid compile-time dependency on newer SDK constants
+        SEL sel = NSSelectorFromString(@"initWithBase64EncodedString:options:");
+        if ([self instancesRespondToSelector:sel])
+        {
+            id instance = [self alloc];
+            NSMethodSignature *sig = [self instanceMethodSignatureForSelector:sel];
+            NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+            [inv setSelector:sel];
+            [inv setTarget:instance];
+            // argument 0 and 1 are self and _cmd, so user args start at index 2
+            NSString *argString = string;
+            NSUInteger options = 1; // NSDataBase64DecodingIgnoreUnknownCharacters == 1
+            [inv setArgument:&argString atIndex:2];
+            [inv setArgument:&options atIndex:3];
+            [inv invoke];
+            __unsafe_unretained id result = nil;
+            [inv getReturnValue:&result];
+            decoded = result;
+        }
+        else
+        {
+            // fallback if selector not available at runtime: call legacy init dynamically if present
+            SEL legacySel = NSSelectorFromString(@"initWithBase64Encoding:");
+            if ([self instancesRespondToSelector:legacySel])
+            {
+                id instance = [self alloc];
+                NSMethodSignature *sig = [self instanceMethodSignatureForSelector:legacySel];
+                NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+                [inv setSelector:legacySel];
+                [inv setTarget:instance];
+                NSString *clean = [string stringByReplacingOccurrencesOfString:@"[^A-Za-z0-9+/=]" withString:@"" options:NSRegularExpressionSearch range:NSMakeRange(0, [string length])];
+                [inv setArgument:&clean atIndex:2];
+                [inv invoke];
+                __unsafe_unretained id result = nil;
+                [inv getReturnValue:&result];
+                decoded = result;
+            }
+            else
+            {
+                decoded = nil;
+            }
+        }
     }
     
     return [decoded length]? decoded: nil;
@@ -77,26 +137,69 @@
     
     if (![NSData instancesRespondToSelector:@selector(base64EncodedStringWithOptions:)])
     {
-        encoded = [self base64Encoding];
+        // Call legacy -base64Encoding dynamically to avoid compile-time errors on newer SDKs
+        SEL legacySel = NSSelectorFromString(@"base64Encoding");
+        if ([self respondsToSelector:legacySel])
+        {
+            NSMethodSignature *sig = [self methodSignatureForSelector:legacySel];
+            NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+            [inv setSelector:legacySel];
+            [inv setTarget:self];
+            [inv invoke];
+            __unsafe_unretained NSString *result = nil;
+            [inv getReturnValue:&result];
+            encoded = result;
+        }
+        else
+        {
+            encoded = nil;
+        }
     }
     else
     
 #endif
     
     {
-        switch (wrapWidth)
+        // Call base64EncodedStringWithOptions: dynamically to avoid compile-time dependency on newer SDK constants
+        SEL sel = NSSelectorFromString(@"base64EncodedStringWithOptions:");
+        if ([self respondsToSelector:sel])
         {
-            case 64:
+            NSMethodSignature *sig = [self methodSignatureForSelector:sel];
+            NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+            [inv setSelector:sel];
+            [inv setTarget:self];
+            NSUInteger options = 0;
+            if (wrapWidth == 64) options = 1; // NSDataBase64Encoding64CharacterLineLength == 1
+            else if (wrapWidth == 76) options = 2; // NSDataBase64Encoding76CharacterLineLength == 2
+            [inv setArgument:&options atIndex:2];
+            [inv invoke];
+            __unsafe_unretained NSString *result = nil;
+            [inv getReturnValue:&result];
+            if (options != 0)
             {
-                return [self base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
+                // If wrapWidth corresponds to an encoding option, return directly
+                return result;
             }
-            case 76:
+            encoded = result;
+        }
+        else
+        {
+            // Call legacy -base64Encoding dynamically to avoid compile-time errors on newer SDKs
+            SEL legacySel = NSSelectorFromString(@"base64Encoding");
+            if ([self respondsToSelector:legacySel])
             {
-                return [self base64EncodedStringWithOptions:NSDataBase64Encoding76CharacterLineLength];
+                NSMethodSignature *sig = [self methodSignatureForSelector:legacySel];
+                NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+                [inv setSelector:legacySel];
+                [inv setTarget:self];
+                [inv invoke];
+                __unsafe_unretained NSString *result = nil;
+                [inv getReturnValue:&result];
+                encoded = result;
             }
-            default:
+            else
             {
-                encoded = [self base64EncodedStringWithOptions:(NSDataBase64EncodingOptions)0];
+                encoded = nil;
             }
         }
     }
